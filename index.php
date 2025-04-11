@@ -11,8 +11,13 @@ if (!isset($_SESSION['user_id'])) {
 // Incluir la conexión a la base de datos
 require_once 'config/db.php';
 
-// Consultar los datos de la tabla
+// Consultar los datos de la tabla y contar los contratos
 try {
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total_contratos FROM data_cobranzas");
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $totalContratos = $result['total_contratos'];
+
     $stmt = $conn->prepare("SELECT * FROM data_cobranzas");
     $stmt->execute();
     $cobranzas = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -90,26 +95,32 @@ try {
     <div class="has-submenu">
         <a href="#" onclick="toggleSubmenu(event)">Contratos</a>
         <div class="submenu">
-            <a href="agregar_contrato.php">Agregar Nuevo Contrato</a>
-            <a href="administrar_contratos.php">Administrar Contratos</a>
+            <a href="administrar_contratos.php">Administrar Vehiculos</a>
+            <a href="administrar_prestamo.php">Administrar Prestamos</a>
+            <a href="administrar_lubricante.php">Administrar Lubricantes</a>
+            <a href="administrar_gps.php">Administrar GPS</a>
         </div>
     </div>
     <div class="has-submenu">
         <a href="#" onclick="toggleSubmenu(event)">Servicios</a>
         <div class="submenu">
-            <a href="consulta_pagos.php">Consulta de Pagos</a>
+            <a href="consulta_pagos.php">Consultar pagos vehiculos</a>
+            <a href="consultar_pagos_prestamos.php">Consultar pagos prestamos</a>
+            <a href="consultar_pagos_lubricantes.php">Consultar pagos lubricantes</a>
+            <a href="consultar_pagos_gps.php">Consultar pagos GPS</a>
             <a href="generar_reportes.php">Generar Reportes</a>
         </div>
     </div>
     <a href="#">Cobranzas</a>
     <a href="administracion.php">Administración</a>
+    <a href="busqueda_nombre.php">BUSCAR</a>
 
     
     <a href="clientes.php">Clientes</a>
     <a href="vehiculos.php">Vehículos</a>
 
     <a href="#">Tipos de Servicios</a>
-    
+
     <a href="logout.php">Cerrar Sesión</a>
 </div>
 
@@ -119,13 +130,15 @@ try {
     <h2>Tablero - Panel de Control</h2>
     <div class="row mt-4">
         <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <h3>4</h3>
-                    <p>Administrar Contratos</p>
-                    <a href="#contratos-section" class="text-white">Más info <i class="fas fa-info-circle"></i></a>
+            <a href="administrar_contratos.php" class="text-decoration-none">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h3><?= $totalContratos ?></h3>
+                        <p>Administrar Contratos</p>
+                        <span class="text-white">Más info <i class="fas fa-info-circle"></i></span>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-md-3">
             <div class="card bg-success text-white">

@@ -1,44 +1,49 @@
 <?php
-// Iniciar sesión
-session_start();
-
-// Verificar si el usuario está autenticado
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit;
-}
-
-// Incluir la conexión a la base de datos
 require_once 'config/db.php';
 
-// Manejar el envío del formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $placa = trim($_POST['placa']);
     $marca = trim($_POST['marca']);
     $modelo = trim($_POST['modelo']);
     $color = trim($_POST['color']);
     $anio = trim($_POST['anio']);
+    $numero_motor = trim($_POST['numero_motor']);
+    $numero_vin = trim($_POST['numero_vin']);
+    $combustible = trim($_POST['combustible']);
 
-    if (!empty($placa) && !empty($marca) && !empty($modelo) && !empty($color) && is_numeric($anio)) {
-        try {
-            $stmt = $conn->prepare("
-                INSERT INTO vehiculos (placa, marca, modelo, color, anio)
-                VALUES (:placa, :marca, :modelo, :color, :anio)
-            ");
-            $stmt->bindParam(':placa', $placa);
-            $stmt->bindParam(':marca', $marca);
-            $stmt->bindParam(':modelo', $modelo);
-            $stmt->bindParam(':color', $color);
-            $stmt->bindParam(':anio', $anio);
-            $stmt->execute();
+    try {
+        // Verificar si la placa ya existe
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM vehiculos WHERE placa = :placa");
+        $stmt->execute([':placa' => $placa]);
+        $existe = $stmt->fetchColumn();
 
-            header("Location: vehiculos.php?success=1");
+        if ($existe > 0) {
+            echo json_encode(["status" => "error", "message" => "Error: La placa ya está registrada"]);
             exit;
-        } catch (PDOException $e) {
-            die("Error al agregar el vehículo: " . $e->getMessage());
         }
-    } else {
-        header("Location: vehiculos.php?error=1");
+
+        // Insertar el nuevo vehículo si la placa no existe
+        $stmt = $conn->prepare("
+            INSERT INTO vehiculos (placa, marca, modelo, color, anio, numero_motor, numero_vin, combustible)
+            VALUES (:placa, :marca, :modelo, :color, :anio, :numero_motor, :numero_vin, :combustible)
+        ");
+
+        $stmt->execute([
+            ':placa' => $placa,
+            ':marca' => $marca,
+            ':modelo' => $modelo,
+            ':color' => $color,
+            ':anio' => $anio,
+            ':numero_motor' => $numero_motor,
+            ':numero_vin' => $numero_vin,
+            ':combustible' => $combustible,
+        ]);
+
+        echo json_encode(["status" => "success", "message" => "Vehículo agregado con éxito"]);
+        exit;
+        
+    } catch (PDOException $e) {
+        echo json_encode(["status" => "error", "message" => "Error al agregar el vehículo: " . $e->getMessage()]);
         exit;
     }
 }

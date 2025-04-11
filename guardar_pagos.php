@@ -8,6 +8,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fecha_pago = $_POST['fecha_pago'] ?? [];
     $letra = $_POST['letra'] ?? [];
     $importe = $_POST['importe'] ?? [];
+    $deuda_mora = $_POST['deuda_mora'] ?? [];
+    $monto_mora = $_POST['monto_mora'] ?? [];
 
     try {
         // Buscar o insertar registro en `data_cobranzas`
@@ -35,18 +37,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Insertar nuevos detalles
         $insertDetail = $conn->prepare("
-            INSERT INTO detalle_pagos (data_cobranza_id, efectivo_o_banco, fecha_pago, letra, importe)
-            VALUES (:data_cobranza_id, :efectivo_o_banco, :fecha_pago, :letra, :importe)
+            INSERT INTO detalle_pagos (data_cobranza_id, efectivo_o_banco, fecha_pago, letra, importe, deuda_mora, monto_mora)
+            VALUES (:data_cobranza_id, :efectivo_o_banco, :fecha_pago, :letra, :importe, :deuda_mora, :monto_mora)
         ");
 
         for ($i = 0; $i < count($efectivo_banco); $i++) {
             if (!empty($efectivo_banco[$i]) || !empty($fecha_pago[$i]) || !empty($letra[$i]) || !empty($importe[$i])) {
+                // Calcular monto_mora si no se envió desde el formulario
+                $calculated_monto_mora = !empty($deuda_mora[$i]) ? $deuda_mora[$i] * 50 : 0;
+
                 $insertDetail->execute([
                     ':data_cobranza_id' => $cobranzaId,
                     ':efectivo_o_banco' => $efectivo_banco[$i],
                     ':fecha_pago' => $fecha_pago[$i],
                     ':letra' => $letra[$i],
-                    ':importe' => $importe[$i]
+                    ':importe' => $importe[$i],
+                    ':deuda_mora' => $deuda_mora[$i] ?? 0,
+                    ':monto_mora' => $calculated_monto_mora
                 ]);
             }
         }

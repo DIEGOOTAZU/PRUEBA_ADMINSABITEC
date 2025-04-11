@@ -86,6 +86,39 @@ try {
             color: #007bff;
             font-size: 20px;
         }
+       
+        .summary {
+        text-align: left; /* Mantiene todo alineado a la izquierda */
+        font-size: 1rem; /* Tamaño uniforme para todos */
+    }
+    .total-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px; /* Espaciado entre filas */
+    }
+    .label {
+        font-weight: bold;
+        margin-right: 10px; /* Espaciado entre el texto y el número */
+        color: #495057;
+        min-width: 120px; /* Asegura una alineación uniforme */
+    }
+    .value {
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .text-success {
+        background-color: #d4edda; /* Fondo verde claro */
+        color: #155724;
+    }
+    .text-danger {
+        background-color: #f8d7da; /* Fondo rojo claro */
+        color: #721c24;
+        margin-left: 4px; /* Ajuste para nivelar con el verde */
+    }
+</style>
+
+       
     </style>
 </head>
 <body>
@@ -96,7 +129,7 @@ try {
         <div class="has-submenu">
             <a href="#" onclick="toggleSubmenu(event)">Contratos</a>
             <div class="submenu">
-                <a href="agregar_contrato.php">Agregar Nuevo Contrato</a>
+                
                 <a href="administrar_contratos.php">Administrar Contratos</a>
             </div>
         </div>
@@ -133,80 +166,118 @@ try {
             <input type="hidden" name="placa" value="<?= htmlspecialchars($placa) ?>">
 
             <table class="table table-bordered month-table" id="pagosTable">
-                <thead class="table-header">
-                    <tr>
-                        <th>Efectivo o Banco</th>
-                        <th>Día de Pago</th>
-                        <th>Letra</th>
-                        <th>Importe</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($pagosExistentes)): ?>
-                        <?php foreach ($pagosExistentes as $pago): ?>
-                            <tr data-id="<?= $pago['id'] ?>">
-                                <td>
-                                    <select name="efectivo_banco[]" class="form-control">
-                                        <option value="EFECTIVO" <?= $pago['efectivo_o_banco'] === 'EFECTIVO' ? 'selected' : '' ?>>EFECTIVO</option>
-                                        <option value="BANCO" <?= $pago['efectivo_o_banco'] === 'BANCO' ? 'selected' : '' ?>>BANCO</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <input type="date" name="fecha_pago[]" class="form-control" value="<?= htmlspecialchars($pago['fecha_pago']) ?>">
-                                </td>
-                                <td>
-                                    <input type="text" name="letra[]" class="form-control" placeholder="Ej: 8/35" value="<?= htmlspecialchars($pago['letra']) ?>">
-                                </td>
-                                <td>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text">$</span>
-                                        </div>
-                                        <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00" value="<?= htmlspecialchars($pago['importe']) ?>">
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, <?= $pago['id'] ?>)">Eliminar</button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                    <!-- Agregar una fila vacía al final -->
-                    <tr>
-                        <td>
-                            <select name="efectivo_banco[]" class="form-control">
-                                <option value="">Seleccione</option>
-                                <option value="EFECTIVO">EFECTIVO</option>
-                                <option value="BANCO">BANCO</option>
-                            </select>
-                        </td>
-                        <td>
-                            <input type="date" name="fecha_pago[]" class="form-control">
-                        </td>
-                        <td>
-                            <input type="text" name="letra[]" class="form-control" placeholder="Ej: 8/35">
-                        </td>
-                        <td>
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text">$</span>
-                                </div>
-                                <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00">
+    <thead class="table-header">
+        <tr>
+            <th>Efectivo o Banco</th>
+            <th>Día de Pago</th>
+            <th>Letra</th>
+            <th>Importe</th>
+            <th>Deuda Mora</th>
+            <th>Monto Mora</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php if (!empty($pagosExistentes)): ?>
+            <?php foreach ($pagosExistentes as $pago): ?>
+                <tr data-id="<?= $pago['id'] ?>">
+                    <td>
+                        <select name="efectivo_banco[]" class="form-control">
+                            <option value="EFECTIVO" <?= $pago['efectivo_o_banco'] === 'EFECTIVO' ? 'selected' : '' ?>>EFECTIVO</option>
+                            <option value="BANCO" <?= $pago['efectivo_o_banco'] === 'BANCO' ? 'selected' : '' ?>>BANCO</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="date" name="fecha_pago[]" class="form-control" value="<?= htmlspecialchars($pago['fecha_pago']) ?>">
+                    </td>
+                    <td>
+                        <input type="text" name="letra[]" class="form-control" placeholder="Ej: 8/35" value="<?= htmlspecialchars($pago['letra']) ?>">
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">$</span>
                             </div>
-                        </td>
-                        <td class="text-center">
-                            <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, null)">Eliminar</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+                            <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00" value="<?= htmlspecialchars($pago['importe']) ?>">
+                        </div>
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" name="deuda_mora[]" class="form-control" placeholder="Ej: 500.00" value="<?= htmlspecialchars($pago['deuda_mora'] ?? '0') ?>" oninput="calcularMontoMora(this)">
+                    </td>
+                    <td>
+                        <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly value="<?= htmlspecialchars(($pago['deuda_mora'] ?? 0) * 50) ?>">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, <?= $pago['id'] ?>)">Eliminar</button>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            
+        <?php endif; ?>
+        <!-- Fila vacía para nuevas entradas -->
+        <tr>
+            <td>
+                <select name="efectivo_banco[]" class="form-control">
+                    <option value="">Seleccione</option>
+                    <option value="EFECTIVO">EFECTIVO</option>
+                    <option value="BANCO">BANCO</option>
+                </select>
+            </td>
+            <td>
+                <input type="date" name="fecha_pago[]" class="form-control">
+            </td>
+            <td>
+                <input type="text" name="letra[]" class="form-control" placeholder="Ej: 8/35">
+            </td>
+            <td>
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text">$</span>
+                    </div>
+                    <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00">
+                </div>
+            </td>
+            <td>
+                <input type="number" step="0.01" name="deuda_mora[]" class="form-control" placeholder="Ej: 2" oninput="calcularMontoMora(this)">
+            </td>
+            <td>
+                <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly>
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, null)">Eliminar</button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+
             <div class="text-center">
                 <span class="add-row-button" onclick="agregarFila()">➕ Agregar Fila</span>
             </div>
+            <div class="summary mt-4">
+            <div class="summary mt-4">
+    <div class="total-row">
+        <span class="label">Total Cancelado:</span>
+        <span id="totalCancelado" class="value text-success">$0.00</span>
+    </div>
+    <div class="total-row">
+        <span class="label">Total Deuda:</span>
+        <span id="totalDeuda" class="value text-danger">$0.00</span>
+    </div>
+    <div class="total-row">
+        <span class="label">Deuda por Mora:</span>
+        <span id="totalDeudaMora" class="value text-warning">$0.00</span>
+    </div>
+</div>
+</div>
+
+
+
+
             <button type="submit" class="btn btn-success save-button mt-3">Guardar Cambios</button>
         </form>
     </div>
+    
 
     <script>
         // Funciones de interacción de la tabla
@@ -235,6 +306,12 @@ try {
                         <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00">
                     </div>
                 </td>
+                <td>
+                <input type="number" step="0.01" name="deuda_mora[]" class="form-control" placeholder="Ej: 2" oninput="calcularMontoMora(this)">
+            </td>
+            <td>
+                <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly>
+            </td>
                 <td class="text-center">
                     <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, null)">Eliminar</button>
                 </td>
@@ -273,6 +350,57 @@ try {
             const parent = event.target.closest('.has-submenu');
             parent.classList.toggle('active');
         }
+
+
+        function calcularTotales() {
+    const importes = document.querySelectorAll('input[name="importe[]"]');
+    const montoMoras = document.querySelectorAll('input[name="monto_mora[]"]');
+    let totalCancelado = 0;
+    let totalDeudaMora = 0;
+
+    // Sumar los importes (Total Cancelado)
+    importes.forEach(input => {
+        const valor = parseFloat(input.value) || 0;
+        totalCancelado += valor;
+    });
+
+    // Sumar los montos de mora (Deuda por Mora)
+    montoMoras.forEach(input => {
+        const valor = parseFloat(input.value) || 0;
+        totalDeudaMora += valor;
+    });
+
+    // Calcular Total Deuda
+    const montoTotal = parseFloat(<?= $cobranza['monto_total'] ?? 0 ?>);
+    const totalDeuda = montoTotal - totalCancelado;
+
+    // Actualizar los campos en la vista
+    document.getElementById('totalCancelado').textContent = `$${totalCancelado.toFixed(2)}`;
+    document.getElementById('totalDeuda').textContent = `$${totalDeuda.toFixed(2)}`;
+    document.getElementById('totalDeudaMora').textContent = `$${totalDeudaMora.toFixed(2)}`;
+}
+
+// Escucha cambios en los importes y montos de mora
+document.querySelectorAll('input[name="importe[]"]').forEach(input => {
+    input.addEventListener('input', calcularTotales);
+});
+document.querySelectorAll('input[name="monto_mora[]"]').forEach(input => {
+    input.addEventListener('input', calcularTotales);
+});
+
+// Calcular totales iniciales
+calcularTotales();
+
+
+function calcularMontoMora(input) {
+    const row = input.closest('tr'); // Obtiene la fila actual
+    const deudaMora = parseFloat(input.value) || 0; // Obtiene el valor de "Deuda Mora"
+    const montoMora = deudaMora * 50; // Calcula "Monto Mora"
+    const montoMoraInput = row.querySelector('input[name="monto_mora[]"]'); // Selecciona el campo de "Monto Mora"
+    montoMoraInput.value = montoMora.toFixed(2); // Actualiza el valor en el campo
+}
+
+        
     </script>
 </body>
 </html>

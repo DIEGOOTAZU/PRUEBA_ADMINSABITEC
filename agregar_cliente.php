@@ -1,43 +1,66 @@
 <?php
+
 // Incluir la conexión a la base de datos
 require_once 'config/db.php';
 
-// Verificar si el formulario fue enviado
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Obtener los datos del formulario
-    $tipo_persona = $_POST['tipo_persona'];
-    $nombres = $_POST['nombres'];
-    $tipo_documento = $_POST['tipo_documento'];
-    $documento = $_POST['documento'];
-    $sexo = $_POST['sexo'];
-    $telefono = $_POST['telefono'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') 
+{
+    // Obtener datos básicos del cliente
+    $tipoPersona = trim($_POST['tipo_persona']);
+    $nombres = trim($_POST['nombres']);
+    $tipoDocumento = trim($_POST['tipo_documento']);
+    $documento = trim($_POST['documento']);
+    $sexo = trim($_POST['sexo']);
+
+    // Obtener los teléfonos como array
+    $telefonos = isset($_POST['telefonos']) && is_array($_POST['telefonos']) ? $_POST['telefonos'] : [];
 
     try {
-        // Preparar la consulta SQL para insertar los datos
-        $stmt = $conn->prepare("INSERT INTO clientes (tipo_persona, nombres, tipo_documento, documento, sexo, telefono) 
-                                VALUES (:tipo_persona, :nombres, :tipo_documento, :documento, :sexo, :telefono)");
+        // Verificar si el documento ya existe
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM clientes WHERE documento = :documento");
+        $stmt->execute([':documento' => $documento]);
+        $existe = $stmt->fetchColumn();
 
-        // Asignar los valores
-        $stmt->bindParam(':tipo_persona', $tipo_persona);
-        $stmt->bindParam(':nombres', $nombres);
-        $stmt->bindParam(':tipo_documento', $tipo_documento);
-        $stmt->bindParam(':documento', $documento);
-        $stmt->bindParam(':sexo', $sexo);
-        $stmt->bindParam(':telefono', $telefono);
+        if ($existe > 0) {
+            echo json_encode(["status" => "error", "message" => "El documento ya está registrado."]);
+            exit;
+        }
 
-        // Ejecutar la consulta
-        $stmt->execute();
+        // Insertar el cliente en la tabla `clientes`
+        $stmt = $conn->prepare("INSERT INTO clientes (tipo_persona, nombres, tipo_documento, documento, sexo) VALUES (:tipo_persona, :nombres, :tipo_documento, :documento, :sexo)");
+        $stmt->execute([
+            ':tipo_persona' => $tipoPersona,
+            ':nombres' => $nombres,
+            ':tipo_documento' => $tipoDocumento,
+            ':documento' => $documento,
+            ':sexo' => $sexo,
+        ]);
 
-        // Redirigir de vuelta a la página clientes.php
-        header("Location: clientes.php?mensaje=Cliente agregado correctamente");
+        // Obtener el ID del cliente recién creado
+        $clienteId = $conn->lastInsertId();
+
+        // Insertar los teléfonos en la tabla `telefonos`
+        foreach ($telefonos as $telefono) {
+            $telefono = trim($telefono); // Eliminar espacios
+            if (!empty($telefono)) {
+                $stmt = $conn->prepare("INSERT INTO telefonos (cliente_id, telefono) VALUES (:cliente_id, :telefono)");
+                $stmt->execute([
+                    ':cliente_id' => $clienteId,
+                    ':telefono' => $telefono,
+                ]);
+            }
+        }
+
+        echo json_encode(["status" => "success", "message" => "Cliente agregado correctamente"]);
         exit;
+
     } catch (PDOException $e) {
-        // Manejo de errores
-        die("Error al guardar los datos: " . $e->getMessage());
+        echo json_encode(["status" => "error", "message" => "Error al guardar los datos: " . $e->getMessage()]);
+        exit;
     }
-} else {
-    // Si se intenta acceder al archivo directamente, redirigir a clientes.php
+} else 
+{
     header("Location: clientes.php");
     exit;
 }
-?>
+
