@@ -107,6 +107,16 @@ try {
         .sidebar a:hover {
             background-color: #495057;
         }
+         .sidebar .submenu {
+            display: none;
+            padding-left: 20px;
+        }
+        .sidebar .submenu a {
+            font-size: 14px;
+        }
+        .sidebar .has-submenu.active .submenu {
+            display: block;
+        }
         .main-content {
             margin-left: 260px;
             padding: 20px;
@@ -120,18 +130,39 @@ try {
 <body>
  <!-- Sidebar -->
  <div class="sidebar">
-        <h3 class="text-center">Sabitec GPS</h3>
-        <a href="index.php">Inicio</a>
-        <a href="administrar_contratos.php">Administrar Contratos</a>
-        <a href="consulta_pagos.php">Consulta de Pagos</a>
-        <a href="generar_reportes.php">Generar Reportes</a>
-        <a href="#">Cobranzas</a>
-        <a href="administracion.php">Administración</a>
-        <a href="clientes.php">Clientes</a>
-        <a href="vehiculos.php">Vehículos</a>
-        <a href="#">Tipos de Servicios</a>
-        <a href="logout.php">Cerrar Sesión</a>
+    <h3 class="text-center">Sabitec GPS</h3>
+    <a href="index.php">Inicio</a>
+    <div class="has-submenu">
+        <a href="#" onclick="toggleSubmenu(event)">Contratos</a>
+        <div class="submenu">
+            <a href="administrar_contratos.php">Administrar Vehiculos</a>
+            <a href="administrar_prestamo.php">Administrar Prestamos</a>
+            <a href="administrar_lubricante.php">Administrar Lubricantes</a>
+            <a href="administrar_gps.php">Administrar GPS</a>
+        </div>
     </div>
+    <div class="has-submenu">
+        <a href="#" onclick="toggleSubmenu(event)">Servicios</a>
+        <div class="submenu">
+            <a href="consulta_pagos.php">Consultar pagos vehiculos</a>
+            <a href="consultar_pagos_prestamos.php">Consultar pagos prestamos</a>
+            <a href="consultar_pagos_lubricantes.php">Consultar pagos lubricantes</a>
+            <a href="consultar_pagos_gps.php">Consultar pagos GPS</a>
+            <a href="generar_reportes.php">Generar Reportes</a>
+        </div>
+    </div>
+    <a href="#">Cobranzas</a>
+    <a href="administracion.php">Administración</a>
+    <a href="busqueda_nombre.php">BUSCAR</a>
+
+    
+    <a href="clientes.php">Clientes</a>
+    <a href="vehiculos.php">Vehículos</a>
+
+    <a href="#">Tipos de Servicios</a>
+
+    <a href="logout.php">Cerrar Sesión</a>
+</div>
 
 <div class="main-content">
     <h2 class="mb-4">Administrar Lubricantes</h2>
@@ -395,6 +426,14 @@ $(document).ready(function() {
         });
     });
 });
+
+
+ // Función para mostrar/ocultar el submenú
+    function toggleSubmenu(event) {
+        event.preventDefault();
+        const parent = event.target.closest('.has-submenu');
+        parent.classList.toggle('active');
+    }
 </script>
 
 

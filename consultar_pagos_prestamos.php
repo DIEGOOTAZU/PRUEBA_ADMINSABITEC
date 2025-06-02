@@ -61,6 +61,9 @@ try {
             display: none;
             padding-left: 20px;
         }
+        .sidebar .submenu a {
+            font-size: 14px;
+        }
         .sidebar .has-submenu.active .submenu {
             display: block;
         }
@@ -80,30 +83,40 @@ try {
 </head>
 <body>
     <!-- Sidebar -->
-    <div class="sidebar">
-        <h3 class="text-center">Sabitec GPS</h3>
-        <a href="index.php">Inicio</a>
-        <div class="has-submenu">
-            <a href="#" class="submenu-toggle">Contratos</a>
-            <div class="submenu">
-                <a href="administrar_contratos.php">Administrar Contratos</a>
-            </div>
+   <div class="sidebar">
+    <h3 class="text-center">Sabitec GPS</h3>
+    <a href="index.php">Inicio</a>
+    <div class="has-submenu">
+        <a href="#" onclick="toggleSubmenu(event)">Contratos</a>
+        <div class="submenu">
+            <a href="administrar_contratos.php">Administrar Vehiculos</a>
+            <a href="administrar_prestamo.php">Administrar Prestamos</a>
+            <a href="administrar_lubricante.php">Administrar Lubricantes</a>
+            <a href="administrar_gps.php">Administrar GPS</a>
         </div>
-        <div class="has-submenu">
-            <a href="#" class="submenu-toggle">Servicios</a>
-            <div class="submenu">
-                <a href="consulta_pagos.php">Consulta de Pagos Vehículos</a>
-                <a href="consulta_pagos_prestamos.php">Consulta de Pagos Préstamos</a> <!-- Aquí agregas la nueva opción -->
-                <a href="generar_reportes.php">Generar Reportes</a>
-            </div>
-        </div>
-        <a href="#">Cobranzas</a>
-        <a href="administracion.php">Administración</a>
-        <a href="clientes.php">Clientes</a>
-        <a href="vehiculos.php">Vehículos</a>
-        <a href="#">Tipos de Servicios</a>
-        <a href="logout.php">Cerrar Sesión</a>
     </div>
+    <div class="has-submenu">
+        <a href="#" onclick="toggleSubmenu(event)">Servicios</a>
+        <div class="submenu">
+            <a href="consulta_pagos.php">Consultar pagos vehiculos</a>
+            <a href="consultar_pagos_prestamos.php">Consultar pagos prestamos</a>
+            <a href="consultar_pagos_lubricantes.php">Consultar pagos lubricantes</a>
+            <a href="consultar_pagos_gps.php">Consultar pagos GPS</a>
+            <a href="generar_reportes.php">Generar Reportes</a>
+        </div>
+    </div>
+    <a href="#">Cobranzas</a>
+    <a href="administracion.php">Administración</a>
+    <a href="busqueda_nombre.php">BUSCAR</a>
+
+    
+    <a href="clientes.php">Clientes</a>
+    <a href="vehiculos.php">Vehículos</a>
+
+    <a href="#">Tipos de Servicios</a>
+
+    <a href="logout.php">Cerrar Sesión</a>
+</div>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -140,6 +153,13 @@ try {
                 });
             });
         });
+
+        // Función para mostrar/ocultar el submenú
+    function toggleSubmenu(event) {
+        event.preventDefault();
+        const parent = event.target.closest('.has-submenu');
+        parent.classList.toggle('active');
+    }
     </script>
 </body>
 </html>

@@ -9,9 +9,22 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config/db.php';
 
 try {
-    $stmt = $conn->prepare("SELECT * FROM lubricantes ORDER BY fecha DESC");
+    $stmt = $conn->prepare("SELECT cliente FROM lubricantes ORDER BY cliente ASC");
     $stmt->execute();
-    $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $clientes_crudos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Filtrar clientes únicos (ignorando espacios y mayúsculas/minúsculas)
+    $clientes_unicos = [];
+    $vistos = [];
+
+    foreach ($clientes_crudos as $cliente) {
+        $nombre_limpio = strtoupper(trim($cliente['cliente']));
+        if (!in_array($nombre_limpio, $vistos)) {
+            $vistos[] = $nombre_limpio;
+            $clientes_unicos[] = ['cliente' => $cliente['cliente']];
+        }
+    }
+
 } catch (PDOException $e) {
     die("Error al obtener los datos: " . $e->getMessage());
 }
@@ -26,7 +39,9 @@ try {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        body { background-color: #f8f9fa; }
+        body { 
+            background-color: #f8f9fa; 
+        }
         .sidebar {
             height: 100vh;
             background-color: #343a40;
@@ -41,15 +56,28 @@ try {
             display: block;
             padding: 10px;
         }
-        .sidebar a:hover { background-color: #495057; }
-        .sidebar .submenu { display: none; padding-left: 20px; }
-        .sidebar .has-submenu.active .submenu { display: block; }
+        .sidebar a:hover {
+            background-color: #495057; 
+        }
+        .sidebar .submenu { 
+            display: none; padding-left: 20px; 
+        }
+        .sidebar .submenu a {
+            font-size: 14px;
+        }
+        .sidebar .has-submenu.active .submenu { 
+            display: block; 
+        }
         .main-content {
             margin-left: 260px;
             padding: 20px;
         }
-        table { width: 100%; margin-top: 20px; }
-        .table-header { background-color: #007bff; color: white; }
+        table { 
+            width: 100%; margin-top: 20px; 
+        }
+        .table-header { 
+            background-color: #007bff; color: white; 
+        }
     </style>
 </head>
 <body>
@@ -59,24 +87,34 @@ try {
     <h3 class="text-center">Sabitec GPS</h3>
     <a href="index.php">Inicio</a>
     <div class="has-submenu">
-        <a href="#" class="submenu-toggle">Contratos</a>
+        <a href="#" onclick="toggleSubmenu(event)">Contratos</a>
         <div class="submenu">
-            <a href="administrar_contratos.php">Administrar Contratos</a>
+            <a href="administrar_contratos.php">Administrar Vehiculos</a>
+            <a href="administrar_prestamo.php">Administrar Prestamos</a>
+            <a href="administrar_lubricante.php">Administrar Lubricantes</a>
+            <a href="administrar_gps.php">Administrar GPS</a>
         </div>
     </div>
     <div class="has-submenu">
-        <a href="#" class="submenu-toggle">Servicios</a>
+        <a href="#" onclick="toggleSubmenu(event)">Servicios</a>
         <div class="submenu">
-            <a href="consulta_pagos.php">Consulta de Pagos</a>
-            <a href="consultar_pagos_lubricantes.php">Pagos Lubricantes</a>
+            <a href="consulta_pagos.php">Consultar pagos vehiculos</a>
+            <a href="consultar_pagos_prestamos.php">Consultar pagos prestamos</a>
+            <a href="consultar_pagos_lubricantes.php">Consultar pagos lubricantes</a>
+            <a href="consultar_pagos_gps.php">Consultar pagos GPS</a>
             <a href="generar_reportes.php">Generar Reportes</a>
         </div>
     </div>
     <a href="#">Cobranzas</a>
     <a href="administracion.php">Administración</a>
+    <a href="busqueda_nombre.php">BUSCAR</a>
+
+    
     <a href="clientes.php">Clientes</a>
     <a href="vehiculos.php">Vehículos</a>
+
     <a href="#">Tipos de Servicios</a>
+
     <a href="logout.php">Cerrar Sesión</a>
 </div>
 
@@ -86,19 +124,17 @@ try {
     <table class="table table-bordered">
         <thead class="table-header">
             <tr>
-                <th>Fecha</th>
-                <th>Marca/Año</th>
+                <th>Cliente</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($registros as $registro): ?>
+            <?php foreach ($clientes_unicos as $registro): ?>
                 <tr>
-                    <td><?= htmlspecialchars($registro['fecha']) ?></td>
-                    <td><?= htmlspecialchars($registro['marca_ano']) ?></td>
+                    <td><?= htmlspecialchars($registro['cliente']) ?></td>
                     <td>
-                        <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#modalDetalle"
-                                onclick='mostrarDetalle(<?= json_encode($registro) ?>)'>
+                        <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#modalConsultar"
+                            onclick="cargarPlacasLubricantes('<?= htmlspecialchars($registro['cliente']) ?>')">
                             Consultar
                         </button>
                     </td>
@@ -109,43 +145,84 @@ try {
 </div>
 
 <!-- Modal -->
-<div class="modal fade" id="modalDetalle" tabindex="-1" role="dialog" aria-labelledby="modalDetalleLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+<div class="modal fade" id="modalConsultar" tabindex="-1" role="dialog" aria-labelledby="modalConsultarLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Detalle del Servicio</h5>
+                <h5 class="modal-title" id="modalConsultarLabel">Placas del Cliente</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body" id="detalleContenido">
-                <!-- Contenido dinámico -->
+            <div class="modal-body">
+                <h5 id="clienteNombre" class="text-center mb-3"></h5>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Placa</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaPlacas">
+                        <!-- Placas dinámicas -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('.submenu-toggle').forEach(toggle => {
-            toggle.addEventListener('click', function (event) {
-                event.preventDefault();
-                const parent = event.target.closest('.has-submenu');
-                parent.classList.toggle('active');
-            });
-        });
-    });
+function cargarPlacasLubricantes(cliente) {
+    document.getElementById('clienteNombre').textContent = `Cliente: ${cliente}`;
 
-    function mostrarDetalle(data) {
-        let html = '<table class="table table-bordered">';
-        for (const [key, value] of Object.entries(data)) {
-            if (key !== 'id') {
-                const campo = key.replace(/_/g, ' ').toUpperCase();
-                html += `<tr><th>${campo}</th><td>${value}</td></tr>`;
+    $.ajax({
+        url: 'consultar_placas_lubricantes.php',
+        type: 'GET',
+        data: { cliente: cliente },
+        success: function(response) {
+            const tablaPlacas = document.getElementById('tablaPlacas');
+            tablaPlacas.innerHTML = '';
+            const placas = JSON.parse(response);
+
+            if (placas.length === 0) {
+                tablaPlacas.innerHTML = '<tr><td colspan="2" class="text-center">No hay vehículos registrados para este cliente.</td></tr>';
+                return;
             }
+
+            placas.forEach(placa => {
+                const row = document.createElement('tr');
+
+                const placaCell = document.createElement('td');
+                placaCell.textContent = placa.placa;
+                row.appendChild(placaCell);
+
+                const accionesCell = document.createElement('td');
+                const button = document.createElement('button');
+                button.textContent = 'Consultar';
+                button.className = 'btn btn-primary btn-sm';
+                button.onclick = function () {
+                    window.location.href = `consultar_fechas_lubricantes.php?cliente=${cliente}&placa=${encodeURIComponent(placa.placa)}`;
+                };
+
+                accionesCell.appendChild(button);
+                row.appendChild(accionesCell);
+                tablaPlacas.appendChild(row);
+            });
+        },
+        error: function() {
+            alert('Error al cargar las placas.');
         }
-        html += '</table>';
-        document.getElementById('detalleContenido').innerHTML = html;
+    });
+}
+// Función para mostrar/ocultar el submenú
+    function toggleSubmenu(event) {
+        event.preventDefault();
+        const parent = event.target.closest('.has-submenu');
+        parent.classList.toggle('active');
     }
 </script>
 
