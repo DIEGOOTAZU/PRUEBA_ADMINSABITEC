@@ -1,4 +1,4 @@
-<?php 
+<?php
 // Iniciar sesión
 session_start();
 
@@ -11,18 +11,39 @@ if (!isset($_SESSION['user_id'])) {
 // Incluir la conexión a la base de datos
 require_once 'config/db.php';
 
-// Consultar los datos de los clientes que están registrados en la tabla de préstamos
+// --- Lógica para la petición AJAX (cuando se pide la lista de préstamos para el modal) ---
+if (isset($_GET['action']) && $_GET['action'] === 'get_prestamos' && isset($_GET['cliente_id'])) {
+    $clienteId = $_GET['cliente_id'];
+
+    try {
+        $stmt = $conn->prepare("SELECT id, garantia, capital FROM prestamos WHERE cliente_id = :cliente_id ORDER BY id ASC");
+        $stmt->execute([':cliente_id' => $clienteId]);
+        $prestamos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        header('Content-Type: application/json');
+        echo json_encode($prestamos);
+        exit; 
+    } catch (PDOException $e) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Error al obtener los préstamos: ' . $e->getMessage()]);
+        exit;
+    }
+}
+// --- Fin de la lógica AJAX ---
+
+
+// --- Lógica para la carga inicial de la página (mostrar la tabla de clientes) ---
 try {
-    // Ajustamos la consulta para que solo se muestren los clientes de la tabla `prestamos`
     $stmt = $conn->prepare("
-        SELECT DISTINCT c.nombres AS cliente, c.id AS cliente_id
+        SELECT DISTINCT c.nombres AS cliente_nombre, c.id AS cliente_id
         FROM prestamos p
         JOIN clientes c ON p.cliente_id = c.id
+        ORDER BY c.nombres ASC
     ");
     $stmt->execute();
     $clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    die("Error al obtener los datos: " . $e->getMessage());
+    die("Error al obtener los datos de los clientes: " . $e->getMessage());
 }
 
 ?>
@@ -82,8 +103,7 @@ try {
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-   <div class="sidebar">
+    <div class="sidebar">
     <h3 class="text-center">Sabitec GPS</h3>
     <a href="index.php">Inicio</a>
     <div class="has-submenu">
@@ -118,7 +138,6 @@ try {
     <a href="logout.php">Cerrar Sesión</a>
 </div>
 
-    <!-- Main Content -->
     <div class="main-content">
         <h2>Consulta de Pagos de Préstamos</h2>
         <table class="table table-bordered">
@@ -131,9 +150,12 @@ try {
             <tbody>
                 <?php foreach ($clientes as $cliente): ?>
                     <tr>
-                        <td><?= htmlspecialchars($cliente['cliente']) ?></td>
+                        <td><?= htmlspecialchars($cliente['cliente_nombre']) ?></td>
                         <td>
-                            <a href="consultar_fechas_prestamos.php?cliente_id=<?= $cliente['cliente_id'] ?>&cliente=<?= urlencode($cliente['cliente']) ?>" class="btn btn-info btn-sm">Consultar</a>
+                            <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#modalConsultarPrestamos"
+                                    onclick="cargarPrestamosPorCliente(<?= htmlspecialchars($cliente['cliente_id']) ?>, '<?= htmlspecialchars($cliente['cliente_nombre']) ?>')">
+                                Consultar Préstamos
+                            </button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -141,25 +163,112 @@ try {
         </table>
     </div>
 
+    <div class="modal fade" id="modalConsultarPrestamos" tabindex="-1" role="dialog" aria-labelledby="modalConsultarPrestamosLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalConsultarPrestamosLabel">Préstamos del Cliente</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <h5 id="clienteNombreEnModal" class="text-center mb-3"></h5>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>ID Préstamo</th>
+                                <th>Garantía</th>
+                                <th>Monto Capital</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaPrestamosDelCliente">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            const submenuToggles = document.querySelectorAll('.submenu-toggle');
-
+            const submenuToggles = document.querySelectorAll('.has-submenu > a');
             submenuToggles.forEach(toggle => {
                 toggle.addEventListener('click', function (event) {
                     event.preventDefault();
-                    const parent = event.target.closest('.has-submenu');
+                    const parent = this.closest('.has-submenu');
                     parent.classList.toggle('active');
                 });
             });
         });
 
-        // Función para mostrar/ocultar el submenú
-    function toggleSubmenu(event) {
-        event.preventDefault();
-        const parent = event.target.closest('.has-submenu');
-        parent.classList.toggle('active');
-    }
+        function toggleSubmenu(event) {
+            event.preventDefault();
+            const parent = event.target.closest('.has-submenu');
+            parent.classList.toggle('active');
+        }
+
+        function cargarPrestamosPorCliente(clienteId, clienteNombre) {
+            document.getElementById('clienteNombreEnModal').textContent = `Cliente: ${clienteNombre}`;
+            
+            const tablaPrestamos = document.getElementById('tablaPrestamosDelCliente');
+            tablaPrestamos.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Cargando préstamos...</td></tr>';
+
+            $.ajax({
+                url: 'consultar_pagos_prestamos.php',
+                type: 'GET',
+                data: { action: 'get_prestamos', cliente_id: clienteId },
+                dataType: 'json', // ¡Esto es clave para que jQuery parsee el JSON automáticamente!
+                success: function(prestamos) { 
+                    tablaPrestamos.innerHTML = ''; // Limpiar mensaje de carga
+
+                    if (prestamos.length > 0) {
+                        prestamos.forEach(prestamo => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${htmlspecialchars(prestamo.id)}</td>
+                                <td>${htmlspecialchars(prestamo.garantia)}</td>
+                                <td>S/ ${parseFloat(prestamo.capital).toFixed(2)}</td>
+                                <td>
+                                    <a href="consultar_fechas_prestamos.php?prestamo_id=${encodeURIComponent(prestamo.id)}&cliente=${encodeURIComponent(clienteNombre)}" class="btn btn-primary btn-sm">
+                                        Ver Detalles
+                                    </a>
+                                </td>
+                            `;
+                            tablaPrestamos.appendChild(row);
+                        });
+                    } else {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `<td colspan="4" class="text-center text-muted">No se encontraron préstamos para este cliente.</td>`;
+                        tablaPrestamos.appendChild(row);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("Error AJAX:", status, error, xhr.responseText);
+                    const tablaPrestamos = document.getElementById('tablaPrestamosDelCliente');
+                    tablaPrestamos.innerHTML = `<td colspan="4" class="text-center text-danger">Error al cargar préstamos: ${error}. Consulta la consola para más detalles.</td>`;
+                }
+            });
+        }
+
+        // Función auxiliar para htmlspecialchars en JS (para evitar XSS en el contenido dinámico)
+        function htmlspecialchars(str) {
+            if (typeof str === 'undefined' || str === null) {
+                return ''; 
+            }
+            str = String(str);
+            var map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return str.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
     </script>
 </body>
 </html>

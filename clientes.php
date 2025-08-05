@@ -29,6 +29,32 @@ try {
 } catch (PDOException $e) {
     die("Error al obtener los datos: " . $e->getMessage());
 }
+
+
+// Configuración de paginación
+$limit = 15; // Número de registros por página
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
+
+// Consultar los datos de la tabla de clientes con límite y offset
+$stmt = $conn->prepare("SELECT c.id, c.tipo_persona, c.nombres, c.tipo_documento, c.documento, c.sexo, 
+           GROUP_CONCAT(t.telefono SEPARATOR ', ') AS telefonos
+    FROM clientes c
+    LEFT JOIN telefonos t ON c.id = t.cliente_id
+    GROUP BY c.id
+    LIMIT :limit OFFSET :offset");
+$stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+$stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
+$clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Calcular el total de registros para la paginación
+$totalStmt = $conn->prepare("SELECT COUNT(*) FROM clientes");
+$totalStmt->execute();
+$totalClientes = $totalStmt->fetchColumn();
+$totalPages = ceil($totalClientes / $limit);
+
+
 ?>
 
 <!DOCTYPE html>
@@ -120,9 +146,16 @@ try {
         const parent = event.target.closest('.has-submenu');
         parent.classList.toggle('active');
     }
+    
 </script>
 
-
+<div class="toast" id="toast" style="position: absolute; top: 20px; right: 20px; display: none;">
+    <div class="toast-header">
+        <strong class="mr-auto">Notificación</strong>
+        <button type="button" class="ml-2 mb-1 close" data-dismiss="toast">&times;</button>
+    </div>
+    <div class="toast-body" id="toastMessage"></div>
+</div>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -382,6 +415,16 @@ try {
 
 
     </div>
+
+    <nav aria-label="Page navigation">
+    <ul class="pagination">
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <li class="page-item <?= ($i === $page) ? 'active' : '' ?>">
+                <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+            </li>
+        <?php endfor; ?>
+    </ul>
+</nav>
     <script>
     document.getElementById('add-telefono').addEventListener('click', function() {
         const telefonosContainer = document.getElementById('telefonos-container');

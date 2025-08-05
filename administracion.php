@@ -25,8 +25,16 @@ $prestamos_asociados = []; // Almacena todos los préstamos encontrados para el 
 $datosPrestamoSeleccionado = null; // Almacena los datos del préstamo específico seleccionado/mostrado
 $prestamo_id_seleccionado = null; // ID del préstamo que se está mostrando actualmente
 $pagosPrestamo = []; // Pagos de préstamos
+$lubricantes_asociados = []; // Almacena todos los contratos de lubricante encontrados para el cliente
+$datosLubricante = null; // Almacena los datos del contrato de lubricante específico seleccionado/mostrado
+$lubricante_id_seleccionado = null; // ID del lubricante que se está mostrando actualmente
+$pagosLubricante = []; // Pagos de contratos de lubricante
+$active_section = ''; // Para controlar qué sección está activa inicialmente
 
 // --- Lógica de procesamiento de la búsqueda ---
+//if (isset($_GET['section']) && $_GET['section'] === 'lubricante') {
+ //   $active_section = 'lubricante';
+//}
 
 // Detectar si se envió el formulario principal por POST (búsqueda por DNI/RUC)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dni'])) {
@@ -43,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dni'])) {
         $stmt_cliente->execute([':dni' => $dni_buscado]);
         $cliente_data = $stmt_cliente->fetch(PDO::FETCH_ASSOC);
 
+        
         if ($cliente_data) {
             $cliente_id_encontrado = $cliente_data['id'];
             $cliente_nombre_encontrado = $cliente_data['nombres'];
@@ -66,6 +75,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dni'])) {
             $stmt_prestamos = $conn->prepare("SELECT * FROM prestamos WHERE cliente_id = :cliente_id");
             $stmt_prestamos->execute([':cliente_id' => $cliente_id_encontrado]);
             $prestamos_asociados = $stmt_prestamos->fetchAll(PDO::FETCH_ASSOC);
+
+            // Obtener los contratos de lubricantes por el NOMBRE del cliente
+$stmt_lubricantes = $conn->prepare("
+    SELECT * FROM lubricantes WHERE cliente = :cliente_nombre
+");
+$stmt_lubricantes->execute([':cliente_nombre' => $cliente_nombre_encontrado]);
+$lubricantes_asociados = $stmt_lubricantes->fetchAll(PDO::FETCH_ASSOC);
+
 
             if (empty($placas_asociadas) && empty($prestamos_asociados)) {
                 $mensajeError = "No se encontraron contratos ni préstamos para el DNI/RUC " . htmlspecialchars($dni_buscado) . ".";
@@ -106,6 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dni'])) {
 }
 // Detectar si se seleccionó una placa del desplegable (viene por GET)
 elseif (isset($_GET['selected_placa']) && isset($_GET['dni_original'])) {
+    $active_section = 'vehiculo';
     $placa_seleccionada_para_mostrar = trim($_GET['selected_placa']);
     $dni_buscado = trim($_GET['dni_original']);
 
@@ -166,6 +184,7 @@ elseif (isset($_GET['selected_placa']) && isset($_GET['dni_original'])) {
 }
 // NUEVO: Detectar si se seleccionó un préstamo del desplegable (viene por GET)
 elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
+    $active_section = 'prestamo'; 
     $prestamo_id_seleccionado = trim($_GET['selected_prestamo_id']);
     $dni_buscado = trim($_GET['dni_original']);
 
@@ -224,6 +243,62 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
         $mensajeError = "Error al obtener datos del préstamo seleccionado: " . $e->getMessage();
     }
 }
+
+// NUEVO: Detectar si se seleccionó un contrato de lubricante (viene por GET)
+elseif (isset($_GET['selected_lubricante_id']) && isset($_GET['dni_original'])) {
+    $lubricante_id_seleccionado = trim($_GET['selected_lubricante_id']);
+    $dni_buscado = trim($_GET['dni_original']);
+    $active_section = 'lubricante';
+
+    try {
+        // Recargar cliente
+        $stmt_cliente = $conn->prepare("
+            SELECT id, nombres FROM clientes WHERE documento = :dni LIMIT 1
+        ");
+        $stmt_cliente->execute([':dni' => $dni_buscado]);
+        $cliente_data = $stmt_cliente->fetch(PDO::FETCH_ASSOC);
+
+        if ($cliente_data) {
+            $cliente_id_encontrado = $cliente_data['id'];
+            $cliente_nombre_encontrado = $cliente_data['nombres'];
+
+            // Recargar placas
+            $stmt_placas = $conn->prepare("SELECT placa, id FROM data_cobranzas WHERE cliente = :cliente_nombre");
+            $stmt_placas->execute([':cliente_nombre' => $cliente_nombre_encontrado]);
+            $placas_asociadas = $stmt_placas->fetchAll(PDO::FETCH_ASSOC);
+
+            // Recargar préstamos
+            $stmt_prestamos = $conn->prepare("SELECT * FROM prestamos WHERE cliente_id = :cliente_id");
+            $stmt_prestamos->execute([':cliente_id' => $cliente_id_encontrado]);
+            $prestamos_asociados = $stmt_prestamos->fetchAll(PDO::FETCH_ASSOC);
+
+            // Recargar lubricantes
+            $stmt_lubricantes = $conn->prepare("
+                SELECT * FROM lubricantes WHERE cliente = :cliente_nombre
+            ");
+            $stmt_lubricantes->execute([':cliente_nombre' => $cliente_nombre_encontrado]);
+            $lubricantes_asociados = $stmt_lubricantes->fetchAll(PDO::FETCH_ASSOC);
+
+            // Obtener lubricante seleccionado
+            $stmt_selected_lubricante = $conn->prepare("
+                SELECT * FROM lubricantes WHERE id = :id AND cliente = :cliente_nombre
+            ");
+            $stmt_selected_lubricante->execute([
+                ':id' => $lubricante_id_seleccionado,
+                ':cliente_nombre' => $cliente_nombre_encontrado
+            ]);
+            $datosLubricante = $stmt_selected_lubricante->fetch(PDO::FETCH_ASSOC);
+
+           if (!$datosLubricante) {
+    echo "<div style='color: red;'>[ERROR] No se encontró el contrato con ID {$lubricante_id_seleccionado}</div>";
+}
+
+        }
+    } catch (PDOException $e) {
+        $mensajeError = "Error al obtener datos del lubricante: " . $e->getMessage();
+    }
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -331,21 +406,23 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
         </div>
         <button type="submit" class="btn btn-primary">Buscar</button>
 
-        <?php if ($cliente_id_encontrado): ?>
-            <?php if (!empty($placas_asociadas)): ?>
-                <button type="button" class="btn btn-info" id="btnAdministrarVehiculo">Administrar Vehículo</button>
-            <?php endif; ?>
-            <?php if (!empty($prestamos_asociados)): ?>
-                <button type="button" class="btn btn-warning" id="btnAdministrarPrestamo">Administrar Préstamo</button>
-            <?php endif; ?>
-        <?php endif; ?>
+       <?php if ($cliente_id_encontrado): ?>
+    <div class="btn-group-custom mt-3">
+    <button id="btnAdministrarVehiculo" data-section="vehiculo">Administrar Vehículo</button>
+<button id="btnAdministrarPrestamo" data-section="prestamo">Administrar Préstamo</button>
+<button id="btnAdministrarLubricante" data-section="lubricante">Administrar Lubricante</button>
+</div>
+
+
+<?php endif; ?>
     </form>
 
     <?php if ($mensajeError): ?>
         <div class="alert alert-danger"><?= $mensajeError ?></div>
     <?php endif; ?>
 
-    <div id="detallesContratoVehiculo" style="display: none;">
+   <div id="detallesContratoVehiculo" style="display: <?= $active_section === 'vehiculo' ? 'block' : 'none' ?>;">
+    <!-- Detalles de Vehículo -->
         <?php if (!empty($placas_asociadas) && count($placas_asociadas) > 1): ?>
             <div class="form-group mt-3" id="placaSelectionContainer">
                 <label for="select_placa">Este DNI/RUC tiene múltiples placas. Seleccione una:</label>
@@ -541,6 +618,112 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
             <p>No se encontraron préstamos registrados para este cliente.</p>
         <?php endif; ?>
     </div>
+
+    <?php if ($active_section === 'lubricante'): ?>
+    <div style="color: red;">[DEBUG] Modo Lubricante Activo</div>
+<?php endif; ?>
+
+<div id="detallesLubricante" class="mt-4" style="display: <?= $active_section === 'lubricante' ? 'block' : 'none' ?>;">
+        <h4>Detalles del Contrato de Lubricante</h4>
+        <?php if (!empty($lubricantes_asociados)): ?>
+            <div class="form-group mt-3" id="lubricanteSelectionContainer">
+                <label for="select_lubricante">Seleccione un contrato de lubricante:</label>
+              <form method="GET" action="administracion.php" class="form-group mt-3" id="lubricanteSelectionContainer">
+    <label for="select_lubricante">Seleccione una placa:</label>
+    <input type="hidden" name="dni_original" value="<?= htmlspecialchars($dni_buscado) ?>">
+    <input type="hidden" name="section" value="lubricante">
+    <select name="selected_lubricante_id" id="select_lubricante" class="form-control" onchange="this.form.submit()">
+        <option value="">-- Seleccionar una placa --</option>
+        <?php
+        $placas_unicas = [];
+        foreach ($lubricantes_asociados as $lubricante_info):
+            $placa = $lubricante_info['placa'];
+            if (!in_array($placa, $placas_unicas)):
+                $placas_unicas[] = $placa;
+                $selected = ($lubricante_info['id'] == ($_GET['selected_lubricante_id'] ?? '')) ? 'selected' : '';
+        ?>
+            <option value="<?= htmlspecialchars($lubricante_info['id']) ?>" <?= $selected ?>>
+                <?= htmlspecialchars($placa) ?>
+            </option>
+        <?php
+            endif;
+        endforeach;
+        ?>
+    </select>
+</form>
+            </div>
+
+            <?php if ($datosLubricante): // Only show details if $datosLubricante is loaded ?>
+                <div class="details-section mb-3">
+                    <h5>Contrato de Lubricante ID: <?= htmlspecialchars($datosLubricante['id']) ?></h5>
+                    <p><strong>Tipo de Lubricante:</strong> <?= htmlspecialchars($datosLubricante['tipo_lubricante'] ?? 'N/A') ?></p>
+                    <p><strong>Fecha de Contrato:</strong> <?= htmlspecialchars($datosLubricante['fecha_contrato'] ?? 'N/A') ?></p>
+                    <p><strong>Costo Mensual:</strong> $<?= htmlspecialchars($datosLubricante['costo_mensual'] ?? '0.00') ?></p>
+                    <p><strong>Duración (meses):</strong> <?= htmlspecialchars($datosLubricante['duracion_meses'] ?? 'N/A') ?></p>
+                    <p><strong>Estado:</strong> <?= htmlspecialchars($datosLubricante['estado'] ?? 'N/A') ?></p>
+                    </div>
+
+                <h4 class="mt-4">Pagos Registrados del Lubricante</h4>
+               
+
+<table class="table table-bordered">
+    <thead class="table-header">
+        <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Cambio Aceite</th>
+            <th>Filtro Aire</th>
+            <th>Filtro Aceite</th>
+            <th>Rev. Motor</th>
+            <th>Bujías</th>
+            <th>Hidrolina</th>
+            <th>Monto</th>
+            <th>Forma de Pago</th>
+            <th>Observación</th>
+            <th>Estado</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($lubricantes_asociados as $index => $lubricante): ?>
+            <tr>
+                <td><?= $index + 1 ?></td>
+                <td><?= htmlspecialchars($lubricante['fecha'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['cambio_aceite_grado'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['f_aire'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['f_aceite'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['lav_motor'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['bujias'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['hidrolina'] ?? 'N/A') ?></td>
+                <td>$<?= htmlspecialchars($lubricante['monto'] ?? '0.00') ?></td>
+                <td><?= htmlspecialchars($lubricante['forma_pago'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($lubricante['observacion'] ?? '-') ?></td>
+                <td><?= htmlspecialchars($lubricante['estado_pago'] ?? 'N/A') ?></td>
+            </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+
+                <div class="summary mt-4">
+                    <div class="total-row">
+                        <span class="label">Total Cancelado Lubricante:</span>
+                        <span id="totalCanceladoLubricante" class="value text-success">$<?= number_format(array_sum(array_column($pagosLubricante, 'importe')), 2) ?></span>
+                    </div>
+                    <div class="total-row">
+                        <?php
+                            $total_contrato_lubricante = ($datosLubricante['costo_mensual'] ?? 0) * ($datosLubricante['duracion_meses'] ?? 0);
+                            $total_deuda_lubricante = $total_contrato_lubricante - array_sum(array_column($pagosLubricante, 'importe'));
+                        ?>
+                        <span class="label">Total Deuda Lubricante:</span>
+                        <span id="totalDeudaLubricante" class="value text-danger">$<?= number_format($total_deuda_lubricante, 2) ?></span>
+                    </div>
+                </div>
+            <?php else: ?>
+                <p>Por favor, seleccione un contrato de lubricante de la lista desplegable para ver los detalles.</p>
+            <?php endif; ?>
+        <?php else: ?>
+            <p>No se encontraron contratos de lubricante registrados para este cliente.</p>
+        <?php endif; ?>
+    </div>
 </div>
 
 <script>
@@ -574,41 +757,73 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
         document.getElementById('totalDeudaMora').textContent = `$${totalDeudaMora.toFixed(2)}`;
     }
 
-    // NUEVO: Función para calcular totales de préstamos
     function calcularTotalesPrestamo() {
-        const capitalAmortizados = document.querySelectorAll('#detallesPrestamo tbody td:nth-child(4)'); // Columna Capital Amortizado
-        const interesPagados = document.querySelectorAll('#detallesPrestamo tbody td:nth-child(5)'); // Columna Interés Pagado
-        const moraPagadas = document.querySelectorAll('#detallesPrestamo tbody td:nth-child(6)'); // Columna Mora Pagada
+        const pagosPrestamoTable = document.querySelector('#detallesPrestamo .table tbody');
+        if (!pagosPrestamoTable) return;
 
-        let totalCapitalAmortizado = 0;
-        let totalInteresPagado = 0;
-        let totalMoraPagada = 0;
+        let totalImportePagado = 0;
+        let totalDeudaMoraPagada = 0; // Esta variable parece no usarse en la salida final para prestamos, pero la mantenemos
+        let totalMontoMoraCalculated = 0;
 
-        capitalAmortizados.forEach(td => {
-            const value = parseFloat(td.textContent.replace('$', '')) || 0;
-            totalCapitalAmortizado += value;
-        });
-        interesPagados.forEach(td => {
-            const value = parseFloat(td.textContent.replace('$', '')) || 0;
-            totalInteresPagado += value;
-        });
-        moraPagadas.forEach(td => {
-            const value = parseFloat(td.textContent.replace('$', '')) || 0;
-            totalMoraPagada += value;
+        Array.from(pagosPrestamoTable.rows).forEach(row => {
+            const importeCell = row.cells[4];
+            const deudaMoraCell = row.cells[5];
+            const montoMoraCell = row.cells[6];
+
+            if (importeCell) {
+                const importeValue = parseFloat(importeCell.textContent.replace('$', '')) || 0;
+                totalImportePagado += importeValue;
+            }
+            if (deudaMoraCell) {
+                const deudaMoraValue = parseFloat(deudaMoraCell.textContent) || 0;
+                totalDeudaMoraPagada += deudaMoraValue;
+            }
+            if (montoMoraCell) {
+                const montoMoraValue = parseFloat(montoMoraCell.textContent) || 0;
+                totalMontoMoraCalculated += montoMoraValue;
+            }
         });
 
-        // Obtener valores iniciales del préstamo desde PHP
         const loanCapital = parseFloat(<?= json_encode($displayLoan['capital'] ?? 0) ?>) || 0;
-        const loanInteresCapital = parseFloat(<?= json_encode($displayLoan['interes_capital'] ?? 0) ?>) || 0; // Total de interés a pagar
+        const loanInteresCapital = parseFloat(<?= json_encode($displayLoan['interes_capital'] ?? 0) ?>) || 0;
+        const totalLoanDeuda = (loanCapital + loanInteresCapital) - totalImportePagado;
 
-        const capitalPendiente = loanCapital - totalCapitalAmortizado;
-        const interesPendiente = loanInteresCapital - totalInteresPagado; // Total interés debido - Total interés pagado
+        document.querySelector('#detallesPrestamo .summary #totalCancelado').textContent = `$${totalImportePagado.toFixed(2)}`;
+        document.querySelector('#detallesPrestamo .summary #totalDeuda').textContent = `$${totalLoanDeuda.toFixed(2)}`;
+        document.querySelector('#detallesPrestamo .summary #totalDeudaMora').textContent = `$${totalMontoMoraCalculated.toFixed(2)}`;
+    }
 
-        document.getElementById('totalCapitalAmortizado').textContent = `$${totalCapitalAmortizado.toFixed(2)}`;
-        document.getElementById('totalInteresPagado').textContent = `$${totalInteresPagado.toFixed(2)}`;
-        document.getElementById('totalMoraPagada').textContent = `$${totalMoraPagada.toFixed(2)}`;
-        document.getElementById('capitalPendiente').textContent = `$${capitalPendiente.toFixed(2)}`;
-        document.getElementById('interesPendiente').textContent = `$${interesPendiente.toFixed(2)}`;
+
+    // ******************************************************************
+    // NUEVA FUNCIÓN: calcularTotalesLubricante
+    // Adaptada de calcularTotales para la estructura de Lubricantes
+    // ******************************************************************
+    function calcularTotalesLubricante() {
+        // Asegúrate de que los IDs/clases coincidan con la estructura de tu tabla de pagos de lubricantes
+        const importesLubricante = document.querySelectorAll('#detallesLubricante input[name="importe_lubricante[]"]'); // Ajusta el nombre del input si es diferente
+        const montoMorasLubricante = document.querySelectorAll('#detallesLubricante input[name="monto_mora_lubricante[]"]'); // Ajusta el nombre del input si es diferente
+        
+        let totalCanceladoLubricante = 0;
+        let totalDeudaMoraLubricante = 0;
+
+        importesLubricante.forEach(input => {
+            const valor = parseFloat(input.value) || 0;
+            totalCanceladoLubricante += valor;
+        });
+
+        montoMorasLubricante.forEach(input => {
+            const valor = parseFloat(input.value) || 0;
+            totalDeudaMoraLubricante += valor;
+        });
+
+        // Asegúrate de que $datosLubricante['monto_total'] sea el valor correcto para el contrato de lubricante
+        const montoTotalLubricante = parseFloat(<?= json_encode($datosLubricante['monto_total'] ?? 0) ?>) || 0;
+        const totalDeudaLubricante = montoTotalLubricante - totalCanceladoLubricante;
+
+        // Asegúrate de que existan estos elementos en tu sección de detalles de lubricantes
+        document.querySelector('#detallesLubricante .summary #totalCancelado').textContent = `$${totalCanceladoLubricante.toFixed(2)}`;
+        document.querySelector('#detallesLubricante .summary #totalDeuda').textContent = `$${totalDeudaLubricante.toFixed(2)}`;
+        document.querySelector('#detallesLubricante .summary #totalDeudaMora').textContent = `$${totalDeudaMoraLubricante.toFixed(2)}`;
     }
 
 
@@ -617,75 +832,108 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
         const detallesContratoVehiculo = document.getElementById('detallesContratoVehiculo');
         const selectPlaca = document.getElementById('select_placa');
 
-        // Nuevos elementos para préstamos
         const btnAdministrarPrestamo = document.getElementById('btnAdministrarPrestamo');
         const detallesPrestamo = document.getElementById('detallesPrestamo');
         const selectPrestamo = document.getElementById('select_prestamo');
 
+        // ******************************************************************
+        // NUEVOS ELEMENTOS PARA LUBRICANTES
+        // ******************************************************************
+        const btnAdministrarLubricante = document.getElementById('btnAdministrarLubricante');
+        const detallesLubricante = document.getElementById('detallesLubricante'); // ID del div que contendrá los detalles de lubricantes
+        const selectLubricante = document.getElementById('select_lubricante'); // Si tuvieras un select para lubricantes
 
-        // Inicializar todas las secciones ocultas
-        if (detallesContratoVehiculo) {
-            detallesContratoVehiculo.style.display = 'none';
-        }
-        if (detallesPrestamo) {
-            detallesPrestamo.style.display = 'none';
-        }
 
-        // Mostrar la sección adecuada si se cargó un contrato de vehículo automáticamente (una sola placa)
+        // Initial display state based on PHP logic
         <?php if ($datosContrato): ?>
-            if (detallesContratoVehiculo) {
-                detallesContratoVehiculo.style.display = 'block';
-            }
-            calcularTotales(); // Calcular totales de vehículo si se muestra
+            detallesContratoVehiculo.style.display = 'block';
+            if (detallesPrestamo) detallesPrestamo.style.display = 'none';
+            // ******************************************************************
+            // ESCONDE LUBRICANTES AL INICIO SI HAY UN CONTRATO DE VEHÍCULO
+            // ******************************************************************
+            if (detallesLubricante) detallesLubricante.style.display = 'none';
+            calcularTotales();
+        <?php elseif ($datosPrestamoSeleccionado): ?>
+            detallesPrestamo.style.display = 'block';
+            if (detallesContratoVehiculo) detallesContratoVehiculo.style.display = 'none';
+            // ******************************************************************
+            // ESCONDE LUBRICANTES AL INICIO SI HAY UN PRÉSTAMO SELECCIONADO
+            // ******************************************************************
+            if (detallesLubricante) detallesLubricante.style.display = 'none';
+            calcularTotalesPrestamo();
+        <?php elseif ($datosLubricante): // ***************** NUEVO: Si hay un contrato de lubricante seleccionado ***************** ?>
+            detallesLubricante.style.display = 'block';
+            if (detallesContratoVehiculo) detallesContratoVehiculo.style.display = 'none';
+            if (detallesPrestamo) detallesPrestamo.style.display = 'none';
+            calcularTotalesLubricante();
+        <?php else: ?>
+            if (detallesContratoVehiculo) detallesContratoVehiculo.style.display = 'none';
+            if (detallesPrestamo) detallesPrestamo.style.display = 'none';
+            // ******************************************************************
+            // ESCONDE LUBRICANTES SI NINGUNO ESTÁ SELECCIONADO
+            // ******************************************************************
+            if (detallesLubricante) detallesLubricante.style.display = 'none';
         <?php endif; ?>
 
-        // Mostrar la sección adecuada si se cargó un préstamo automáticamente (un solo préstamo o seleccionado)
-        <?php if ($datosPrestamoSeleccionado): ?>
-            if (detallesPrestamo) {
+        // Event listener for "Administrar Vehículo" button
+        if (btnAdministrarVehiculo) {
+            btnAdministrarVehiculo.addEventListener('click', function(event) {
+                event.preventDefault();
+const currentUrl = new URL(window.location.href);
+currentUrl.searchParams.delete('section');
+window.history.replaceState({}, '', currentUrl.toString());
+
+detallesContratoVehiculo.style.display = 'block';
+                if (detallesPrestamo) {
+                    detallesPrestamo.style.display = 'none';
+                }
+                // ******************************************************************
+                // ESCONDE LUBRICANTES CUANDO SE CLIQUEA VEHÍCULO
+                // ******************************************************************
+                if (detallesLubricante) {
+                    detallesLubricante.style.display = 'none';
+                }
+                calcularTotales();
+            });
+        }
+
+        // Event listener for "Administrar Préstamo" button
+        if (btnAdministrarPrestamo) {
+            btnAdministrarPrestamo.addEventListener('click', function(event) {
+                event.preventDefault();
                 detallesPrestamo.style.display = 'block';
-                // Ocultar detalles de vehículos si el préstamo está visible
                 if (detallesContratoVehiculo) {
                     detallesContratoVehiculo.style.display = 'none';
                 }
-                calcularTotalesPrestamo(); // Calcular totales de préstamo si se muestra
-            }
-        <?php endif; ?>
-
-
-        // Event listener para el botón "Administrar Vehículo"
-        if (btnAdministrarVehiculo) {
-            btnAdministrarVehiculo.addEventListener('click', function() {
-                if (detallesContratoVehiculo.style.display === 'none') {
-                    detallesContratoVehiculo.style.display = 'block';
-                    // Ocultar detalles de préstamos si están visibles
-                    if (detallesPrestamo) {
-                        detallesPrestamo.style.display = 'none';
-                    }
-                    calcularTotales(); // Recalcular totales al mostrar la sección de vehículo
-                } else {
-                    detallesContratoVehiculo.style.display = 'none';
+                // ******************************************************************
+                // ESCONDE LUBRICANTES CUANDO SE CLIQUEA PRÉSTAMO
+                // ******************************************************************
+                if (detallesLubricante) {
+                    detallesLubricante.style.display = 'none';
                 }
+                calcularTotalesPrestamo();
             });
         }
 
-        // Event listener para el botón "Administrar Préstamo"
-        if (btnAdministrarPrestamo) {
-            btnAdministrarPrestamo.addEventListener('click', function() {
-                if (detallesPrestamo.style.display === 'none') {
-                    detallesPrestamo.style.display = 'block';
-                    // Ocultar detalles de vehículos si están visibles
-                    if (detallesContratoVehiculo) {
-                        detallesContratoVehiculo.style.display = 'none';
-                    }
-                    calcularTotalesPrestamo(); // Recalcular totales al mostrar la sección de préstamo
-                } else {
-                    detallesPrestamo.style.display = 'none';
+        // ******************************************************************
+        // NUEVO EVENT LISTENER PARA "Administrar Lubricante" button
+        // ******************************************************************
+        if (btnAdministrarLubricante) {
+            btnAdministrarLubricante.addEventListener('click', function(event) {
+                event.preventDefault(); // Evitar el comportamiento predeterminado del botón
+                detallesLubricante.style.display = 'block'; // Muestra la sección de lubricantes
+                if (detallesContratoVehiculo) {
+                    detallesContratoVehiculo.style.display = 'none'; // Oculta la sección de vehículos
                 }
+                if (detallesPrestamo) {
+                    detallesPrestamo.style.display = 'none'; // Oculta la sección de préstamos
+                }
+                calcularTotalesLubricante(); // Llama a la función de cálculo para lubricantes
             });
         }
 
 
-        // Event listener para el desplegable de placas
+        // Event listener for the vehicle plate dropdown
         if (selectPlaca) {
             selectPlaca.addEventListener('change', function() {
                 const selectedPlaca = this.value;
@@ -694,13 +942,12 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
                 if (selectedPlaca) {
                     window.location.href = `administracion.php?selected_placa=${encodeURIComponent(selectedPlaca)}&dni_original=${encodeURIComponent(dniOriginal)}`;
                 } else {
-                    // Si se selecciona la opción "Seleccionar Placa", recargar solo con el DNI
                     window.location.href = `administracion.php?dni_original=${encodeURIComponent(dniOriginal)}`;
                 }
             });
         }
 
-        // NUEVO: Event listener para el desplegable de préstamos
+        // Event listener for the loan dropdown
         if (selectPrestamo) {
             selectPrestamo.addEventListener('change', function() {
                 const selectedPrestamoId = this.value;
@@ -709,11 +956,29 @@ elseif (isset($_GET['selected_prestamo_id']) && isset($_GET['dni_original'])) {
                 if (selectedPrestamoId) {
                     window.location.href = `administracion.php?selected_prestamo_id=${encodeURIComponent(selectedPrestamoId)}&dni_original=${encodeURIComponent(dniOriginal)}`;
                 } else {
-                    // Si se selecciona la opción " -- Seleccionar Préstamo --", recargar solo con el DNI
                     window.location.href = `administracion.php?dni_original=${encodeURIComponent(dniOriginal)}`;
                 }
             });
         }
+
+        // ******************************************************************
+        // NUEVO EVENT LISTENER PARA EL DROPDOWN DE LUBRICANTES (si lo tienes)
+        // Similar a los otros dropdowns para recargar la página con un lubricante seleccionado
+        // ******************************************************************
+        if (selectLubricante) {
+            selectLubricante.addEventListener('change', function() {
+                const selectedLubricanteId = this.value;
+                const dniOriginal = "<?= htmlspecialchars($dni_buscado) ?>";
+
+                if (selectedLubricanteId) {
+                    window.location.href = `administracion.php?selected_lubricante_id=${encodeURIComponent(selectedLubricanteId)}&dni_original=${encodeURIComponent(dniOriginal)}&section=lubricante`;
+
+                } else {
+                    window.location.href = `administracion.php?dni_original=${encodeURIComponent(dniOriginal)}`;
+                }
+            });
+        }
+
     });
 </script>
 

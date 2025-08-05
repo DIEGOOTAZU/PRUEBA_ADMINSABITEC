@@ -3,28 +3,45 @@
 require_once 'config/db.php';
 
 // Obtener los datos pasados por GET
-$cliente = isset($_GET['cliente']) ? trim($_GET['cliente']) : null;
-$cliente_id = isset($_GET['cliente_id']) ? trim($_GET['cliente_id']) : null;
+// Ahora obtenemos prestamo_id directamente del URL
+$prestamo_id = isset($_GET['prestamo_id']) ? trim($_GET['prestamo_id']) : null;
+$cliente_nombre_url = isset($_GET['cliente']) ? trim($_GET['cliente']) : null; // Guardamos el nombre del cliente de la URL por si acaso
 
-// Verificar que los parámetros estén presentes
 
+// Inicializar variables para evitar warnings si no se encuentran datos
+$cliente_data = null;
+$prestamo_data = null;
+$pagosExistentes = [];
 
-// Realizar consulta para obtener los datos del cliente
+// Verificar que el prestamo_id esté presente
+if ($prestamo_id === null) {
+    die("Error: No se ha proporcionado un ID de préstamo.");
+}
+
+// Realizar consultas
 try {
-    // Aquí hacemos una consulta relacionada con el cliente, recuperando su nombre
-    $stmtCliente = $conn->prepare("SELECT * FROM clientes WHERE id = :cliente_id");
-    $stmtCliente->execute([':cliente_id' => $cliente_id]);
-    $cliente = $stmtCliente->fetch(PDO::FETCH_ASSOC);  // Esto devuelve un array con los datos del cliente
-    
-    // Consulta para obtener los datos del préstamo
-    $stmtPrestamos = $conn->prepare("SELECT * FROM prestamos WHERE cliente_id = :cliente_id");
-    $stmtPrestamos->execute([':cliente_id' => $cliente_id]);
-    $prestamos = $stmtPrestamos->fetch(PDO::FETCH_ASSOC);  // Esto devuelve un array con los datos del préstamo
+    // 1. Obtener los datos del PRÉSTAMO específico usando prestamo_id
+    $stmtPrestamo = $conn->prepare("SELECT * FROM prestamos WHERE id = :prestamo_id");
+    $stmtPrestamo->execute([':prestamo_id' => $prestamo_id]);
+    $prestamo_data = $stmtPrestamo->fetch(PDO::FETCH_ASSOC);
 
-    // Obtener los pagos guardados para este cliente y préstamo
-    $stmtPagos = $conn->prepare("SELECT * FROM detalle_pagos_prestamo WHERE prestamo_id = :prestamo_id");
-    $stmtPagos->execute([':prestamo_id' => $prestamos['id']]);
-    $pagosExistentes = $stmtPagos->fetchAll(PDO::FETCH_ASSOC); // Guardar todos los pagos en un array
+    // Si no se encuentra el préstamo, no tiene sentido seguir
+    if (!$prestamo_data) {
+        // Podrías redirigir o mostrar un mensaje de error diferente
+        // Por ahora, simplemente saldremos y el HTML mostrará "No se encontraron datos..."
+        // die("Error: Préstamo no encontrado."); // Puedes descomentar esta línea para depuración
+    } else {
+        // 2. Obtener los datos del CLIENTE usando el cliente_id del préstamo encontrado
+        $stmtCliente = $conn->prepare("SELECT * FROM clientes WHERE id = :cliente_id");
+        $stmtCliente->execute([':cliente_id' => $prestamo_data['cliente_id']]);
+        $cliente_data = $stmtCliente->fetch(PDO::FETCH_ASSOC);
+        
+        // 3. Obtener los pagos guardados para este PRÉSTAMO específico
+        $stmtPagos = $conn->prepare("SELECT * FROM detalle_pagos_prestamo WHERE prestamo_id = :prestamo_id");
+        $stmtPagos->execute([':prestamo_id' => $prestamo_id]); // Usamos el prestamo_id directamente
+        $pagosExistentes = $stmtPagos->fetchAll(PDO::FETCH_ASSOC); // Recuperamos *todas* las filas de pagos
+    }
+
 } catch (PDOException $e) {
     die("Error al obtener los datos: " . $e->getMessage());
 }
@@ -70,10 +87,37 @@ try {
         .text-success {
             color: green;
         }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-top: 1px solid #eee;
+        }
+        .total-row:first-child {
+            border-top: none;
+        }
+        .total-row .label {
+            font-weight: bold;
+        }
+        .text-danger {
+            color: red;
+        }
+        .text-warning {
+            color: orange;
+        }
+        .add-row-button {
+            cursor: pointer;
+            color: #007bff;
+            text-decoration: underline;
+            margin-top: 10px;
+            display: inline-block;
+        }
+        .add-row-button:hover {
+            color: #0056b3;
+        }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
     <div class="sidebar">
         <h3 class="text-center">Sabitec GPS</h3>
         <a href="index.php">Inicio</a>
@@ -98,32 +142,29 @@ try {
         <a href="logout.php">Cerrar Sesión</a>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
         <h2>Detalle de Pagos</h2>
         
-        <!-- Mostrar datos del préstamo -->
-        <h5>Cliente: <?= htmlspecialchars($cliente['nombres']) ?></h5>
+        <h5>Cliente: <?= htmlspecialchars($cliente_data['nombres'] ?? $cliente_nombre_url) ?></h5>
 
-<?php if ($prestamos): ?>
-    <h5>Mensualidad: $<?= htmlspecialchars($prestamos['capital']) ?></h5>
-    <h5>Fecha de Contrato: <?= htmlspecialchars($prestamos['fecha_prestamo']) ?></h5>
-    <h5>Fecha de Pago: <?= htmlspecialchars($prestamos['vence']) ?></h5>
-    <h5>Monto de Prestamo: <?= htmlspecialchars($prestamos['garantia']) ?></h5>
-    <h5>Interes %: <?= htmlspecialchars($prestamos['interes']) ?></h5>
-    <h5>Numero de Cuotas: <?= htmlspecialchars($prestamos['tiempo']) ?></h5>
-    <h5>Total Interes: <?= htmlspecialchars($prestamos['interes_capital']) ?></h5>
-    <h5>Monto total a pagar: <?= htmlspecialchars($prestamos['interes_cobrado']) ?></h5>
+<?php if ($prestamo_data): // Ahora verificamos si $prestamo_data no es null ?>
+    <h5>Mensualidad: $<?= htmlspecialchars($prestamo_data['capital']) ?></h5>
+    <h5>Fecha de Contrato: <?= htmlspecialchars($prestamo_data['fecha_prestamo']) ?></h5>
+    <h5>Fecha de Pago: <?= htmlspecialchars($prestamo_data['vence']) ?></h5>
+    <h5>Garantía: <?= htmlspecialchars($prestamo_data['garantia']) ?></h5> <h5>Interes %: <?= htmlspecialchars($prestamo_data['interes']) ?></h5>
+    <h5>Numero de Cuotas: <?= htmlspecialchars($prestamo_data['tiempo']) ?></h5>
+    <h5>Total Interes: <?= htmlspecialchars($prestamo_data['interes_capital']) ?></h5>
+    <h5>Monto total a pagar: <?= htmlspecialchars($prestamo_data['interes_cobrado']) ?></h5>
 <?php else: ?>
-    <p>No se encontraron datos de préstamo para este cliente.</p>
+    <p>No se encontraron datos de préstamo para el ID: **<?= htmlspecialchars($prestamo_id) ?>**.</p>
 <?php endif; ?>
 
-<!-- Mostrar los pagos guardados -->
 <form id="formPagos" method="POST" action="guardar_pagos_prestamo.php">
-    <input type="hidden" name="cliente_id" value="<?= htmlspecialchars($cliente_id) ?>" />
-    <input type="hidden" name="prestamo_id" value="<?= htmlspecialchars($prestamos['id']) ?>" />
+    <input type="hidden" name="prestamo_id" value="<?= htmlspecialchars($prestamo_id) ?>" /> 
+    <?php if ($cliente_data): ?>
+        <input type="hidden" name="cliente_id" value="<?= htmlspecialchars($cliente_data['id']) ?>" />
+    <?php endif; ?>
     
-
     <table class="table table-bordered" >
         <thead class="table-header">
             <tr>
@@ -167,13 +208,11 @@ try {
                             <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly value="<?= htmlspecialchars(($pago['deuda_mora'] ?? 0) * 50) ?>">
                         </td>
                         <td class="text-center">
-                        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, <?= $pago['id'] ?>)">Eliminar</button>
-
+                            <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, <?= $pago['id'] ?>)">Eliminar</button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
-            <!-- Fila vacía para nuevas entradas -->
             <tr>
                 <td>
                     <select name="efectivo_banco[]" class="form-control">
@@ -203,9 +242,7 @@ try {
                     <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly>
                 </td>
                 <td class="text-center">
-                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, <?= $pago['id'] ?>)">Eliminar</button>
-
-
+                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, null)">Eliminar</button>
                 </td>
             </tr>
         </tbody>
@@ -260,11 +297,19 @@ try {
                     <input type="number" step="0.01" name="importe[]" class="form-control" placeholder="Ej: 500.00">
                 </div>
             </td>
+            <td>
+                <input type="number" step="0.01" name="deuda_mora[]" class="form-control" placeholder="Ej: 2" oninput="calcularMontoMora(this)">
+            </td>
+            <td>
+                <input type="text" name="monto_mora[]" class="form-control" placeholder="Ej: 100.00" readonly>
+            </td>
             <td class="text-center">
                 <button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this, null)">Eliminar</button>
             </td>
         `;
         tableBody.appendChild(newRow);
+        // Recalcular totales después de agregar una fila
+        calcularTotales(); 
     }
 
 
@@ -273,80 +318,96 @@ try {
         if (confirm('¿Está seguro de eliminar esta fila?')) {
             const row = button.closest('tr'); // Obtén la fila más cercana al botón
 
-            $.ajax({
-                url: 'eliminar_pago_prestamos.php',  // El archivo que ejecutará la eliminación
-                type: 'POST',
-                data: { id: id },  // Envia el ID al archivo PHP
-                success: function(response) {
-                    if (response === 'success') {
-                        row.remove(); // Si se eliminó con éxito, eliminamos la fila de la vista
-                    } else {
-                        alert('Error al eliminar el registro.');
+            // Solo intentar eliminar de la base de datos si tiene un ID existente
+            if (id !== null) {
+                $.ajax({
+                    url: 'eliminar_pago_prestamos.php',  // El archivo que ejecutará la eliminación
+                    type: 'POST',
+                    data: { id: id },  // Envia el ID al archivo PHP
+                    success: function(response) {
+                        if (response.trim() === 'success') { // Usar trim() por si hay espacios extra
+                            row.remove(); // Si se eliminó con éxito, eliminamos la fila de la vista
+                            calcularTotales(); // Recalcular totales después de eliminar
+                        } else {
+                            alert('Error al eliminar el registro: ' + response); // Mostrar respuesta del servidor
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error al comunicarse con el servidor: ' + status + ', ' + error);
+                        console.error("Error AJAX eliminar:", xhr.responseText);
                     }
-                },
-                error: function() {
-                    alert('Error al comunicarse con el servidor.');
-                }
-            });
+                });
+            } else {
+                // Si la fila no tiene ID (es nueva y no guardada), solo la eliminamos de la vista
+                row.remove();
+                calcularTotales(); // Recalcular totales después de eliminar
+            }
         }
     }
 
     function toggleSubmenu(event) {
-            event.preventDefault();
-            const parent = event.target.closest('.has-submenu');
-            parent.classList.toggle('active');
-        }
+        event.preventDefault();
+        const parent = event.target.closest('.has-submenu');
+        parent.classList.toggle('active');
+    }
 
+    // Asegúrate de que esta función se llama cuando se carga la página y cuando cambian los inputs
+    function calcularTotales() {
+        const importes = document.querySelectorAll('input[name="importe[]"]');
+        const montoMoras = document.querySelectorAll('input[name="monto_mora[]"]');
+        let totalCancelado = 0;
+        let totalDeudaMora = 0;
 
-        function calcularTotales() {
-    const importes = document.querySelectorAll('input[name="importe[]"]');
-    const montoMoras = document.querySelectorAll('input[name="monto_mora[]"]');
-    let totalCancelado = 0;
-    let totalDeudaMora = 0;
+        // Sumar los importes (Total Cancelado)
+        importes.forEach(input => {
+            const valor = parseFloat(input.value) || 0;
+            totalCancelado += valor;
+        });
 
-    // Sumar los importes (Total Cancelado)
-    importes.forEach(input => {
-        const valor = parseFloat(input.value) || 0;
-        totalCancelado += valor;
+        // Sumar los montos de mora (Deuda por Mora)
+        montoMoras.forEach(input => {
+            const valor = parseFloat(input.value) || 0;
+            totalDeudaMora += valor;
+        });
+
+        // Calcular Total Deuda (necesitas el monto total del préstamo para esto)
+        // Usa la variable PHP prestamo_data['interes_cobrado'] si existe
+        const montoTotalPrestamo = parseFloat(<?= json_encode($prestamo_data['interes_cobrado'] ?? 0) ?>);
+        const totalDeuda = montoTotalPrestamo - totalCancelado;
+
+        // Actualizar los campos en la vista
+        document.getElementById('totalCancelado').textContent = `$${totalCancelado.toFixed(2)}`;
+        document.getElementById('totalDeuda').textContent = `$${totalDeuda.toFixed(2)}`;
+        document.getElementById('totalDeudaMora').textContent = `$${totalDeudaMora.toFixed(2)}`;
+    }
+
+    // Escucha cambios en los inputs después de que el DOM esté completamente cargado y también para filas agregadas dinámicamente
+    document.addEventListener('DOMContentLoaded', () => {
+        // Inicializar los toggle de submenú
+        document.querySelectorAll('.submenu-toggle').forEach(item => {
+            item.addEventListener('click', toggleSubmenu);
+        });
+
+        // Recalcular totales cuando cualquier input relevante cambia
+        document.querySelector('#formPagos').addEventListener('input', (event) => {
+            if (event.target.name === 'importe[]' || event.target.name === 'deuda_mora[]') {
+                calcularTotales();
+            }
+        });
+        
+        // Calcular totales iniciales al cargar la página
+        calcularTotales();
     });
 
-    // Sumar los montos de mora (Deuda por Mora)
-    montoMoras.forEach(input => {
-        const valor = parseFloat(input.value) || 0;
-        totalDeudaMora += valor;
-    });
 
-    // Calcular Total Deuda
-    const montoTotal = parseFloat(<?= $cobranza['monto_total'] ?? 0 ?>);
-    const totalDeuda = montoTotal - totalCancelado;
-
-    // Actualizar los campos en la vista
-    document.getElementById('totalCancelado').textContent = `$${totalCancelado.toFixed(2)}`;
-    document.getElementById('totalDeuda').textContent = `$${totalDeuda.toFixed(2)}`;
-    document.getElementById('totalDeudaMora').textContent = `$${totalDeudaMora.toFixed(2)}`;
-}
-
-// Escucha cambios en los importes y montos de mora
-document.querySelectorAll('input[name="importe[]"]').forEach(input => {
-    input.addEventListener('input', calcularTotales);
-});
-document.querySelectorAll('input[name="monto_mora[]"]').forEach(input => {
-    input.addEventListener('input', calcularTotales);
-});
-
-// Calcular totales iniciales
-calcularTotales();
-
-
-function calcularMontoMora(input) {
-    const row = input.closest('tr'); // Obtiene la fila actual
-    const deudaMora = parseFloat(input.value) || 0; // Obtiene el valor de "Deuda Mora"
-    const montoMora = deudaMora * 50; // Calcula "Monto Mora"
-    const montoMoraInput = row.querySelector('input[name="monto_mora[]"]'); // Selecciona el campo de "Monto Mora"
-    montoMoraInput.value = montoMora.toFixed(2); // Actualiza el valor en el campo
-}
-
-
+    function calcularMontoMora(input) {
+        const row = input.closest('tr'); // Obtiene la fila actual
+        const deudaMora = parseFloat(input.value) || 0; // Obtiene el valor de "Deuda Mora"
+        const montoMora = deudaMora * 50; // Calcula "Monto Mora" (asumiendo 50 por unidad de mora)
+        const montoMoraInput = row.querySelector('input[name="monto_mora[]"]'); // Selecciona el campo de "Monto Mora"
+        montoMoraInput.value = montoMora.toFixed(2); // Actualiza el valor en el campo
+        calcularTotales(); // Recalcular totales inmediatamente después de calcular la mora
+    }
 </script>
 
 </body>
